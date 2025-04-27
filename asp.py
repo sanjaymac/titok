@@ -6,19 +6,27 @@ from datetime import datetime
 
 # Function to extract video details from TikTok page
 def fetch_tiktok_details(url):
+    # Set headers to simulate a real browser request
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+    
     # Make a request to the TikTok page
-    response = requests.get(url)
-    if response.status_code != 200:
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        st.error(f"Error fetching URL: {e}")
         return None
 
     # Parse the page using BeautifulSoup
     soup = BeautifulSoup(response.text, 'html.parser')
 
-    # Find the JSON data embedded in the page (it's in a script tag)
+    # Look for the JSON data embedded in the page (inside a script tag)
     json_data = None
     for script in soup.find_all('script'):
         if 'window.__INIT_PROPS__' in script.text:
-            # Extract JSON data from script
+            # Extract JSON data from the script
             json_text = script.text.strip().replace('window.__INIT_PROPS__=', '')
             try:
                 json_data = json.loads(json_text)
@@ -26,11 +34,12 @@ def fetch_tiktok_details(url):
                 pass
             break
 
-    # If no data found, return None
+    # If no JSON data was found, return None
     if json_data is None:
+        st.error("Could not find video data on this page.")
         return None
     
-    # Extract relevant details
+    # Extract video details from the JSON structure
     try:
         play_count = json_data['props']['pageProps']['itemInfo']['itemStruct']['stats']['playCount']
         create_time_timestamp = int(json_data['props']['pageProps']['itemInfo']['itemStruct']['createTime'])
@@ -40,6 +49,7 @@ def fetch_tiktok_details(url):
 
         return play_count, create_time
     except KeyError:
+        st.error("Could not extract the necessary video details.")
         return None
 
 # Streamlit app UI
