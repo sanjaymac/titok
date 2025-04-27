@@ -1,71 +1,70 @@
 import streamlit as st
+import requests
 from bs4 import BeautifulSoup
-import urllib.request
-import json
-from datetime import datetime
+import re
+import pandas as pd
+from datetime import datetime, timedelta
 
-# Function to fetch video details from TikTok page
-def fetch_tiktok_details(url):
-    # Set headers to simulate a real browser request
+def get_tiktok_data(url, use_vpn=False):
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
 
     try:
-        # Send the request to TikTok URL and get the page content
-        req = urllib.request.Request(url, headers=headers)
-        response = urllib.request.urlopen(req)
-        page_content = response.read()
+        response = requests.get(url, headers=headers, timeout=10)
 
-        # Parse the HTML page with BeautifulSoup
-        soup = BeautifulSoup(page_content, 'html.parser')
+        if response.status_code != 200:
+            return {"URL": url, "Play Count": None, "Create Time (IST)": None}
 
-        # Search for the embedded JSON data
-        json_data = None
-        for script in soup.find_all('script'):
-            if 'window.__INIT_PROPS__' in script.text:
-                json_text = script.text.strip().replace('window.__INIT_PROPS__=', '')
-                try:
-                    json_data = json.loads(json_text)
-                except json.JSONDecodeError:
-                    pass
-                break
+        soup = BeautifulSoup(response.content, 'html.parser')
+        html_text = str(soup)
 
-        # If no JSON data is found, return None
-        if json_data is None:
-            st.error("Could not find video data on this page.")
-            return None
+        play_count_match = re.search(r'"playCount":(\d+),', html_text)
+        create_time_match = re.search(r'"createTime":"?(\d+)"?,', html_text)
 
-        # Extract video stats and creation time
-        try:
-            play_count = json_data['props']['pageProps']['itemInfo']['itemStruct']['stats']['playCount']
-            create_time_timestamp = int(json_data['props']['pageProps']['itemInfo']['itemStruct']['createTime'])
+        play_count = play_count_match.group(1) if play_count_match else None
+        create_time = create_time_match.group(1) if create_time_match else None
 
-            # Convert the timestamp to a human-readable format
-            create_time = datetime.utcfromtimestamp(create_time_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        # Convert create_time to IST timezone
+        if create_time:
+            utc_time = datetime.utcfromtimestamp(int(create_time))
+            ist_time = utc_time + timedelta(hours=5, minutes=30)
+            ist_time_str = ist_time.strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            ist_time_str = None
 
-            return play_count, create_time
-        except KeyError:
-            st.error("Could not extract the necessary video details.")
-            return None
+        return {
+            "URL": url,
+            "Play Count": play_count,
+            "Create Time (IST)": ist_time_str
+        }
 
     except Exception as e:
-        st.error(f"Error fetching or parsing the page: {e}")
-        return None
+        return {"URL": url, "Play Count": None, "Create Time (IST)": None}
 
-# Streamlit UI
-st.title('TikTok Video Stats')
+# Streamlit app
+st.title("Bulk TikTok Play Count & Creation Time Scraper")
 
-# Input field for TikTok URL
-url = st.text_input("Enter TikTok Video URL")
+# Multi-line text input for multiple URLs
+urls_input = st.text_area("Enter TikTok video URLs (one per line):")
+use_vpn = st.checkbox("Check if using VPN")
 
-if url:
-    # Fetch video details from TikTok
-    details = fetch_tiktok_details(url)
+if st.button("Run Scraper"):
+    if urls_input.strip():
+        urls = [url.strip() for url in urls_input.strip().split('\n') if url.strip()]
+        
+        results = []
+        for url in urls:
+            data = get_tiktok_data(url, use_vpn)
+            results.append(data)
 
-    if details:
-        play_count, create_time = details
-        st.write(f"**Play Count:** {play_count}")
-        st.write(f"**Create Time:** {create_time}")
+        # Display results in a table
+        df = pd.DataFrame(results)
+        st.dataframe(df)
+
+        # Optionally allow download
+        csv = df.to_csv(index=False)
+        st.download_button("Download CSV", data=csv, file_name="tiktok_data.csv", mime="text/csv")
+
     else:
-        st.write("Could not fetch video details. Please check the URL and try again.")
+        st.warning("Please enter at least one TikTok URL.")
