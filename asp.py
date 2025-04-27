@@ -29,7 +29,7 @@ def get_tiktok_data(url, use_vpn=False):
         if create_time:
             utc_time = datetime.utcfromtimestamp(int(create_time))
             ist_time = utc_time + timedelta(hours=5, minutes=30)
-            ist_time_str = ist_time.strftime('%Y-%m-%d %H:%M:%S')
+            ist_time_str = ist_time.strftime('%d/%m/%y %H:%M:%S')  # Change format to DD/MM/YY HH:MM:SS
         else:
             ist_time_str = None
 
@@ -43,7 +43,7 @@ def get_tiktok_data(url, use_vpn=False):
         return {"URL": url, "Play Count": None, "Create Time (IST)": None}
 
 # Streamlit app
-st.title("Bulk TikTok Play Count & Creation Time Scraper")
+st.title("TikTok MetaData Retriever")
 
 # Multi-line text input for multiple URLs
 urls_input = st.text_area("Enter TikTok video URLs (one per line):")
