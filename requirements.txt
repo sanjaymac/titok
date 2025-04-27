@@ -1,3 +1,4 @@
 streamlit
+TikTok-Api
 requests
 beautifulsoup4
