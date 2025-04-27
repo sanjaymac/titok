@@ -1,55 +1,29 @@
 import streamlit as st
-import requests
-from bs4 import BeautifulSoup
-import json
+from TikTokApi import TikTokApi
 from datetime import datetime
 
-# Function to extract video details from TikTok page
+# Initialize the TikTokApi
+api = TikTokApi.get_instance()
+
+# Function to fetch video details using the TikTok API
 def fetch_tiktok_details(url):
-    # Set headers to simulate a real browser request
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    }
+    # Extract the video ID from the URL
+    video_id = url.split("/")[-1]
     
-    # Make a request to the TikTok page
     try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-    except requests.RequestException as e:
-        st.error(f"Error fetching URL: {e}")
-        return None
-
-    # Parse the page using BeautifulSoup
-    soup = BeautifulSoup(response.text, 'html.parser')
-
-    # Look for the JSON data embedded in the page (inside a script tag)
-    json_data = None
-    for script in soup.find_all('script'):
-        if 'window.__INIT_PROPS__' in script.text:
-            # Extract JSON data from the script
-            json_text = script.text.strip().replace('window.__INIT_PROPS__=', '')
-            try:
-                json_data = json.loads(json_text)
-            except json.JSONDecodeError:
-                pass
-            break
-
-    # If no JSON data was found, return None
-    if json_data is None:
-        st.error("Could not find video data on this page.")
-        return None
-    
-    # Extract video details from the JSON structure
-    try:
-        play_count = json_data['props']['pageProps']['itemInfo']['itemStruct']['stats']['playCount']
-        create_time_timestamp = int(json_data['props']['pageProps']['itemInfo']['itemStruct']['createTime'])
+        # Fetch the video by its ID
+        video = api.get_video_by_id(video_id)
+        
+        # Extract stats and creation time
+        play_count = video['stats']['playCount']
+        create_time_timestamp = video['createTime']
         
         # Convert the timestamp to a human-readable format
         create_time = datetime.utcfromtimestamp(create_time_timestamp).strftime('%Y-%m-%d %H:%M:%S')
-
+        
         return play_count, create_time
-    except KeyError:
-        st.error("Could not extract the necessary video details.")
+    except Exception as e:
+        st.error(f"Error fetching video details: {e}")
         return None
 
 # Streamlit app UI
