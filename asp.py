@@ -1,41 +1,66 @@
 import streamlit as st
-from TikTokApi import TikTokApi
+import requests
+from bs4 import BeautifulSoup
+import json
 from datetime import datetime
 
-# Initialize the TikTokApi
-api = TikTokApi.get_instance()
-
-# Function to fetch video details using the TikTok API
+# Function to fetch video details from TikTok page
 def fetch_tiktok_details(url):
-    # Extract the video ID from the URL
-    video_id = url.split("/")[-1]
+    # Set headers to simulate a real browser request
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
     
+    # Send the request to TikTok URL
     try:
-        # Fetch the video by its ID
-        video = api.get_video_by_id(video_id)
-        
-        # Extract stats and creation time
-        play_count = video['stats']['playCount']
-        create_time_timestamp = video['createTime']
-        
-        # Convert the timestamp to a human-readable format
-        create_time = datetime.utcfromtimestamp(create_time_timestamp).strftime('%Y-%m-%d %H:%M:%S')
-        
-        return play_count, create_time
-    except Exception as e:
-        st.error(f"Error fetching video details: {e}")
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        st.error(f"Error fetching the URL: {e}")
         return None
 
-# Streamlit app UI
+    # Parse the HTML page with BeautifulSoup
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    # Search for the embedded JSON data
+    json_data = None
+    for script in soup.find_all('script'):
+        if 'window.__INIT_PROPS__' in script.text:
+            json_text = script.text.strip().replace('window.__INIT_PROPS__=', '')
+            try:
+                json_data = json.loads(json_text)
+            except json.JSONDecodeError:
+                pass
+            break
+
+    # If no JSON data is found, return None
+    if json_data is None:
+        st.error("Could not find video data on this page.")
+        return None
+
+    # Extract video stats and creation time
+    try:
+        play_count = json_data['props']['pageProps']['itemInfo']['itemStruct']['stats']['playCount']
+        create_time_timestamp = int(json_data['props']['pageProps']['itemInfo']['itemStruct']['createTime'])
+
+        # Convert the timestamp to a human-readable format
+        create_time = datetime.utcfromtimestamp(create_time_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+
+        return play_count, create_time
+    except KeyError:
+        st.error("Could not extract the necessary video details.")
+        return None
+
+# Streamlit UI
 st.title('TikTok Video Stats')
 
-# Input for TikTok URL
+# Input field for TikTok URL
 url = st.text_input("Enter TikTok Video URL")
 
 if url:
-    # Fetch video details
+    # Fetch video details from TikTok
     details = fetch_tiktok_details(url)
-    
+
     if details:
         play_count, create_time = details
         st.write(f"**Play Count:** {play_count}")
