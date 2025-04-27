@@ -54,16 +54,15 @@ if st.button("Run Scraper"):
         urls = [url.strip() for url in urls_input.strip().split('\n') if url.strip()]
         
         total_urls = len(urls)
-        progress_bar = st.progress(0)  # Initialize progress bar
+        progress_text = st.empty()  # Create an empty placeholder for progress text
         results = []
 
         for index, url in enumerate(urls):
             data = get_tiktok_data(url, use_vpn)
             results.append(data)
 
-            # Update the progress bar
-            progress_bar.progress((index + 1) / total_urls)
-            st.text(f"Processing {index + 1}/{total_urls} URLs...")  # Show progress in text
+            # Update progress count in a single line
+            progress_text.text(f"Processing {index + 1}/{total_urls} URLs...")
 
         # Display results in a table
         df = pd.DataFrame(results)
