@@ -1,67 +1,60 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-import re
 import json
 from datetime import datetime
 
-st.set_page_config(page_title="TikTok Video Info Scraper", page_icon="🎵", layout="centered")
+# Function to extract video details from TikTok page
+def fetch_tiktok_details(url):
+    # Make a request to the TikTok page
+    response = requests.get(url)
+    if response.status_code != 200:
+        return None
 
-st.title("🎵 TikTok Video Info Scraper (Desktop with BeautifulSoup)")
-st.write("Enter a TikTok video URL below:")
+    # Parse the page using BeautifulSoup
+    soup = BeautifulSoup(response.text, 'html.parser')
 
-url = st.text_input("TikTok Video URL:")
+    # Find the JSON data embedded in the page (it's in a script tag)
+    json_data = None
+    for script in soup.find_all('script'):
+        if 'window.__INIT_PROPS__' in script.text:
+            # Extract JSON data from script
+            json_text = script.text.strip().replace('window.__INIT_PROPS__=', '')
+            try:
+                json_data = json.loads(json_text)
+            except json.JSONDecodeError:
+                pass
+            break
 
-if st.button("Fetch Info"):
-    if not url:
-        st.error("Please enter a TikTok video URL.")
+    # If no data found, return None
+    if json_data is None:
+        return None
+    
+    # Extract relevant details
+    try:
+        play_count = json_data['props']['pageProps']['itemInfo']['itemStruct']['stats']['playCount']
+        create_time_timestamp = int(json_data['props']['pageProps']['itemInfo']['itemStruct']['createTime'])
+        
+        # Convert the timestamp to a human-readable format
+        create_time = datetime.utcfromtimestamp(create_time_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+
+        return play_count, create_time
+    except KeyError:
+        return None
+
+# Streamlit app UI
+st.title('TikTok Video Stats')
+
+# Input for TikTok URL
+url = st.text_input("Enter TikTok Video URL")
+
+if url:
+    # Fetch video details
+    details = fetch_tiktok_details(url)
+    
+    if details:
+        play_count, create_time = details
+        st.write(f"**Play Count:** {play_count}")
+        st.write(f"**Create Time:** {create_time}")
     else:
-        try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                              "AppleWebKit/537.36 (KHTML, like Gecko) "
-                              "Chrome/119.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-            }
-
-            response = requests.get(url, headers=headers)
-            if response.status_code != 200:
-                st.error(f"Failed to fetch page. Status code: {response.status_code}")
-            else:
-                soup = BeautifulSoup(response.text, 'html.parser')
-
-                # Find the script with id="SIGI_STATE"
-                script_tag = soup.find('script', {'id': 'SIGI_STATE'})
-                if not script_tag:
-                    st.error("SIGI_STATE script not found. TikTok probably blocked the bot.")
-                else:
-                    json_text = script_tag.string
-
-                    # Parse the JSON safely
-                    try:
-                        data = json.loads(json_text)
-
-                        # Extract video ID
-                        video_id_match = re.search(r'/video/(\d+)', url)
-                        if not video_id_match:
-                            st.error("Could not extract video ID from URL.")
-                        else:
-                            video_id = video_id_match.group(1)
-
-                            video_data = data.get('ItemModule', {}).get(video_id)
-                            if not video_data:
-                                st.error("Video data not found inside SIGI_STATE JSON.")
-                            else:
-                                play_count = video_data['stats']['playCount']
-                                create_time = int(video_data['createTime'])
-                                upload_date = datetime.utcfromtimestamp(create_time).strftime('%Y-%m-%d %H:%M:%S')
-
-                                st.success("Video Details Found 🎯")
-                                st.write(f"**Play Count:** {play_count}")
-                                st.write(f"**Upload Date (UTC):** {upload_date}")
-
-                    except json.JSONDecodeError as e:
-                        st.error(f"Failed to parse SIGI_STATE JSON: {e}")
-
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
+        st.write("Could not fetch video details. Please check the URL and try again.")
