@@ -19,7 +19,7 @@ def get_tiktok_data(url, use_vpn=False):
         soup = BeautifulSoup(response.content, 'html.parser')
         html_text = str(soup)
 
-        play_count_match = re.search(r'"playCount":(\d+),', html_text)
+        play_count_match = re.search(r'""playCount"":(\d+),', html_text)
         create_time_match = re.search(r'"createTime":"?(\d+)"?,', html_text)
 
         play_count = play_count_match.group(1) if play_count_match else None
