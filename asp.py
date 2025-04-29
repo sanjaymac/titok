@@ -1,33 +1,35 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-import re
+import json
 import pandas as pd
 from datetime import datetime, timedelta
 
 def get_tiktok_data(url, use_vpn=False):
-    # Convert to mobile version
-    mobile_url = url.replace("www.tiktok.com", "m.tiktok.com")
-
     headers = {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15A372 Safari/604.1"
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/91.0.4472.124 Safari/537.36"
+        )
     }
 
     try:
-        response = requests.get(mobile_url, headers=headers, timeout=10)
-
+        response = requests.get(url, headers=headers, timeout=10)
         if response.status_code != 200:
             return {"URL": url, "Play Count": None, "Create Time (IST)": None}
 
-        soup = BeautifulSoup(response.content, 'html.parser')
-        html_text = str(soup)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        script_tag = soup.find('script', id='SIGI_STATE')
+        if not script_tag:
+            return {"URL": url, "Play Count": None, "Create Time (IST)": None}
 
-        play_count_match = re.search(r'"playCount":(\d+)', html_text)
-        create_time_match = re.search(r'"createTime":"?(\d+)"?', html_text)
+        json_data = json.loads(script_tag.string)
+        video_data = next(iter(json_data.get('ItemModule', {}).values()), {})
+        play_count = video_data.get('stats', {}).get('playCount')
+        create_time = video_data.get('createTime')
 
-        play_count = play_count_match.group(1) if play_count_match else None
-        create_time = create_time_match.group(1) if create_time_match else None
-
+        # Convert to IST
         if create_time:
             utc_time = datetime.utcfromtimestamp(int(create_time))
             ist_time = utc_time + timedelta(hours=5, minutes=30)
@@ -44,11 +46,10 @@ def get_tiktok_data(url, use_vpn=False):
     except Exception as e:
         return {"URL": url, "Play Count": None, "Create Time (IST)": None}
 
+# ------------------- Streamlit App ------------------- #
 
-# Streamlit app
-st.title("TikTok MetaData Retriever")
+st.title("TikTok Metadata Extractor")
 
-# Multi-line text input for multiple URLs
 urls_input = st.text_area("Enter TikTok video URLs (one per line):")
 use_vpn = st.checkbox("Check if using VPN")
 
@@ -57,23 +58,19 @@ if st.button("Run Scraper"):
         urls = [url.strip() for url in urls_input.strip().split('\n') if url.strip()]
         
         total_urls = len(urls)
-        progress_text = st.empty()  # Create an empty placeholder for progress text
+        progress_text = st.empty()
         results = []
 
         for index, url in enumerate(urls):
             data = get_tiktok_data(url, use_vpn)
             results.append(data)
-
-            # Update progress count in a single line
             progress_text.text(f"Processing {index + 1}/{total_urls} URLs...")
 
-        # Display results in a table
         df = pd.DataFrame(results)
         st.dataframe(df)
 
-        # Optionally allow download
+        # Download button
         csv = df.to_csv(index=False)
-        st.download_button("Download CSV", data=csv, file_name="tiktok_data.csv", mime="text/csv")
-
+        st.download_button("Download CSV", data=csv, file_name="tiktok_metadata.csv", mime="text/csv")
     else:
         st.warning("Please enter at least one TikTok URL.")
