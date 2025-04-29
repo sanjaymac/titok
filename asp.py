@@ -6,12 +6,15 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 def get_tiktok_data(url, use_vpn=False):
+    # Convert to mobile version
+    mobile_url = url.replace("www.tiktok.com", "m.tiktok.com")
+
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15A372 Safari/604.1"
     }
 
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(mobile_url, headers=headers, timeout=10)
 
         if response.status_code != 200:
             return {"URL": url, "Play Count": None, "Create Time (IST)": None}
@@ -19,17 +22,16 @@ def get_tiktok_data(url, use_vpn=False):
         soup = BeautifulSoup(response.content, 'html.parser')
         html_text = str(soup)
 
-        play_count_match = re.search(r'"playCount":(\d+),', html_text)
-        create_time_match = re.search(r'"createTime":"?(\d+)"?,', html_text)
+        play_count_match = re.search(r'"playCount":(\d+)', html_text)
+        create_time_match = re.search(r'"createTime":"?(\d+)"?', html_text)
 
         play_count = play_count_match.group(1) if play_count_match else None
         create_time = create_time_match.group(1) if create_time_match else None
 
-        # Convert create_time to IST timezone
         if create_time:
             utc_time = datetime.utcfromtimestamp(int(create_time))
             ist_time = utc_time + timedelta(hours=5, minutes=30)
-            ist_time_str = ist_time.strftime('%d/%m/%y %H:%M:%S')  # Change format to DD/MM/YY HH:MM:SS
+            ist_time_str = ist_time.strftime('%d/%m/%y %H:%M:%S')
         else:
             ist_time_str = None
 
@@ -41,6 +43,7 @@ def get_tiktok_data(url, use_vpn=False):
 
     except Exception as e:
         return {"URL": url, "Play Count": None, "Create Time (IST)": None}
+
 
 # Streamlit app
 st.title("TikTok MetaData Retriever")
