@@ -19,11 +19,25 @@ def get_tiktok_data(url, use_vpn=False):
         soup = BeautifulSoup(response.content, 'html.parser')
         html_text = str(soup)
 
-        play_count_match = re.search(r'""playCount"":(\d+),', html_text)
+        play_count_match = re.search(r'"playCount":(\d+),', html_text)
         create_time_match = re.search(r'"createTime":"?(\d+)"?,', html_text)
 
-        play_count = play_count_match.group(1) if play_count_match else None
-        create_time = create_time_match.group(1) if create_time_match else None
+        play_count_re = re.compile(r'''
+            "playCount"      # the key
+            \s*:\s*          # colon with any amount of space
+            (\d+)            # capture one or more digits
+        ''', re.VERBOSE)
+
+# more flexible createTime: optional quotes around the number and optional trailing comma
+        create_time_re = re.compile(r'''
+            "createTime"     # the key
+            \s*:\s*          # colon +/- whitespace
+            "?(?P<ts>\d+)"?  # digits, maybe in quotes
+            \s*,?            # maybe whitespace + comma
+        ''', re.VERBOSE)
+
+        play_count = play_count_re.group(1) if play_count_re else None
+        create_time = create_time_re.group(1) if create_time_re else None
 
         # Convert create_time to IST timezone
         if create_time:
